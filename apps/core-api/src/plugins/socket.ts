@@ -61,6 +61,32 @@ export default fp(
         })
       }
 
+      socket.on(
+        'client:submit-answer',
+        async (payload: {
+          stepId: string
+          answer: string
+          duration: number
+        }) => {
+          try {
+            await fastify.interviewService.processUserAnswer(
+              sessionId,
+              payload.stepId,
+              payload.answer,
+              payload.duration,
+            )
+          } catch (error) {
+            fastify.log.error(
+              `[${sessionId}] Error processing answer for step ${payload.stepId}: ${error}`,
+            )
+            socket.emit('server:error', {
+              code: 'ANSWER_PROCESSING_FAILED',
+              message: 'Failed to process your answer.',
+            })
+          }
+        },
+      )
+
       socket.on('disconnect', () => {
         fastify.log.info(
           `Socket disconnected: ${socket.id} from room ${sessionId}`,
@@ -74,6 +100,8 @@ export default fp(
       instance.io.close()
       done()
     })
+
+    fastify.log.info('Socket.io plugin loaded')
   },
   {
     name: 'io',
