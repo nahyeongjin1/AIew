@@ -31,7 +31,10 @@ export default function InterviewForm() {
   }
 
   return (
-    <form className="w-full h-full flex gap-24 m-auto" onSubmit={handleSubmit}>
+    <form
+      className="w-full h-full flex flex-col lg:flex-row gap-24 m-auto"
+      onSubmit={handleSubmit}
+    >
       {/* 왼쪽 card
        직업, 회사명, 인재상을 입력함*/}
       <Card className="flex-1 flex flex-col justify-between">
