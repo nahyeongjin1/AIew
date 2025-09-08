@@ -1,22 +1,12 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
+import EditDeleteButtons from './EditDeleteButtons'
 import InterviewStatusChip from './InterviewStatusChip'
 
 import { privateFetch } from '@/app/lib/fetch'
-
-export type Interview = {
-  id: string
-  title: string
-  company: string
-  jobTitle: string
-  jobSpec: string
-  createdAt: string
-  status: InterviewStatus
-}
 
 export default function InterviewCard({
   data,
@@ -50,6 +40,15 @@ export default function InterviewCard({
 
     return () => clearInterval(interval)
   }, [interview.id, interview.status])
+
+  const handleDelete = (id?: string) => {
+    if (!id) {
+      console.error('id가 필요합니다')
+      return
+    }
+    //Carousel에서 삭제
+    onDelete?.(id)
+  }
 
   const { id, title, company, jobTitle, jobSpec, createdAt, status } = interview
 
@@ -90,38 +89,7 @@ export default function InterviewCard({
 
       <footer className="flex justify-between items-center h-40">
         <div className="flex gap-8 h-32">
-          <button
-            type="button"
-            className="px-10 text-neutral-subtext flex items-center justify-center gap-6 z-10"
-            onClick={(e) => {
-              e.preventDefault()
-              // TODO: open edit screen
-            }}
-          >
-            <Image
-              src="/icons/edit.svg"
-              alt="edit icon"
-              width={12}
-              height={12}
-            />
-            edit
-          </button>
-          <button
-            type="button"
-            className="px-10 text-error flex items-center justify-center gap-6 z-10"
-            onClick={(e) => {
-              e.preventDefault()
-              onDelete?.(id)
-            }}
-          >
-            <Image
-              src="/icons/delete.svg"
-              alt="delete icon"
-              width={12}
-              height={12}
-            />
-            delete
-          </button>
+          <EditDeleteButtons id={id} onDeleteClick={handleDelete} />
         </div>
         <Link
           className="bg-primary rounded-[10px] text-neutral-inverse px-20 h-40 flex items-center justify-center z-10"
