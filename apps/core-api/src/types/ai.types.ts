@@ -75,9 +75,9 @@ export interface CriterionScore {
 }
 
 /**
- * AI 서버의 /evaluate-answer 엔드포인트 응답 객체 타입
+ * AI 서버의 /answer-evaluating 엔드포인트 응답 객체 타입
  */
-export interface EvaluationResult {
+export interface AnswerEvaluationResult {
   question_id: string
   category: string
   answer_duration_sec: number
@@ -92,7 +92,15 @@ export interface EvaluationResult {
 }
 
 /**
- * AI 서버의 /evaluate-answer 엔드포인트 요청 본문 타입
+ * AI 서버의 /session-evaluating 엔드포인트 응답 객체 타입
+ */
+export interface SessionEvaluationResult {
+  average_score: number
+  session_feedback: string
+}
+
+/**
+ * AI 서버의 /answer-evaluating 엔드포인트 요청 본문 타입
  */
 export interface AnswerEvaluationRequest {
   question_id: string
