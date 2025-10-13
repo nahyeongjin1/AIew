@@ -12,6 +12,7 @@ declare module 'socket.io' {
   interface Socket {
     user: User
     sessionId?: string // 소켓 객체에 세션 ID 저장
+    uploadChunks?: Buffer[] // 업로드 중인 청크 데이터
   }
 }
 
@@ -210,6 +211,77 @@ export default fp(
         }
       })
 
+      //file을 chunk 단위로 받은 후 해당 chunks를 모아 File 생성
+      socket.uploadChunks = []
+
+      socket.on(
+        'client:upload-chunk',
+        (p: { index: number; chunk: ArrayBuffer }) => {
+          try {
+            if (!p.chunk || !p.chunk.byteLength) {
+              return socket.emit('server:error', {
+                message: 'Invalid chunk data.',
+              })
+            }
+
+            if (!socket.uploadChunks) socket.uploadChunks = []
+            socket.uploadChunks[p.index] = Buffer.from(new Uint8Array(p.chunk))
+          } catch (error) {
+            fastify.log.error(
+              `Error processing chunk ${p.index} for socket ${socket.id}:`,
+              error,
+            )
+            socket.emit('server:error', {
+              message: 'Failed to process chunk.',
+            })
+          }
+        },
+      )
+
+      socket.on('client:upload-finish', async (p: { type: string }) => {
+        try {
+          if (!socket.uploadChunks || socket.uploadChunks.length === 0) {
+            return socket.emit('server:error', {
+              message: 'No chunks to process.',
+            })
+          }
+
+          // 인덱스 누락 체크 & 정렬
+          const ordered = socket.uploadChunks.filter(Boolean)
+          if (ordered.length !== socket.uploadChunks.length) {
+            fastify.log.warn(
+              `Missing chunks detected for socket ${socket.id}. Expected: ${socket.uploadChunks.length}, Got: ${ordered.length}`,
+            )
+          }
+
+          const big = Buffer.concat(ordered)
+          const blob = new Blob([big], p) // Node 18+
+          const filename = `record-${crypto.randomUUID()}.${p.type.startsWith('video/mp4') ? 'mp4' : 'webm'}`
+          const file = new File([blob], filename, {
+            type: p.type,
+            lastModified: Date.now(),
+          }) // undici/File 또는 전역 지원
+
+          console.dir({
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            lastModified: file.lastModified,
+          })
+          socket.uploadChunks = [] // 메모리 해제
+          //TODO:: ai 서버로 보내기
+        } catch (error) {
+          fastify.log.error(
+            `Error finalizing upload for socket ${socket.id}:`,
+            error,
+          )
+          socket.emit('server:error', {
+            message: 'Failed to finalize upload.',
+          })
+          socket.uploadChunks = [] // 에러 시에도 메모리 해제
+        }
+      })
+
       socket.on(
         'client:submit-answer',
         async (payload: {
@@ -273,6 +345,15 @@ export default fp(
 
       socket.on('disconnect', async () => {
         fastify.log.info(`Socket disconnected: ${socket.id}`)
+
+        // 업로드 중이던 청크 정리
+        if (socket.uploadChunks && socket.uploadChunks.length > 0) {
+          fastify.log.warn(
+            `Socket ${socket.id} disconnected with ${socket.uploadChunks.length} unfinished chunks. Clearing memory.`,
+          )
+          socket.uploadChunks = []
+        }
+
         // 연결 종료 시에도 elapsedSec 업데이트 시도
         if (socket.sessionId) {
           // 이 부분은 클라이언트에서 보내주는 마지막 시간을 놓칠 경우를 대비
