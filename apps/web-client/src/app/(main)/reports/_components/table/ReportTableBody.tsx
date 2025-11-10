@@ -5,9 +5,27 @@ import { Query } from '../../page'
 import styles from './table.module.css'
 
 import Dots from '@/../public/icons/dots.svg'
+import EmptyMessage from '@/app/(main)/dashboard/_components/EmptyMessage'
+import { privateFetch } from '@/app/lib/fetch'
 
 export default async function TableBody({ query }: { query: Query }) {
-  const reports = await fetchCurrentPageReports(query)
+  const { CORE_API_URL, API_PREFIX } = process.env
+
+  const response = await privateFetch(
+    `${CORE_API_URL}/${API_PREFIX}/reports/?${new URLSearchParams(query)}`,
+    { cache: 'no-store' },
+  )
+  const reports = await response.json()
+
+  if (!reports || reports.length === 0) {
+    return (
+      <EmptyMessage
+        main=" No result to display"
+        sub="complete an interview to generate a report"
+        showIcon
+      />
+    )
+  }
 
   return (
     <div className="flex-1 w-full min-h-0 flex flex-col justify-around px-8 overflow-y-auto">
@@ -37,12 +55,4 @@ export default async function TableBody({ query }: { query: Query }) {
       )}
     </div>
   )
-}
-
-async function fetchCurrentPageReports(query: Query) {
-  const response = await fetch(
-    `http://localhost:4000/mock-api/reports?${new URLSearchParams(query)}`,
-  )
-  await new Promise((resolve) => setTimeout(resolve, 1500))
-  return await response.json()
 }
