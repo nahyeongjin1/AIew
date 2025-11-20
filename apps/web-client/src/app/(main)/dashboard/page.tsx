@@ -8,16 +8,6 @@ import RecentInterview from './_components/recent/RecentInterview'
 import RecentReports from './_components/recent/RecentReports'
 import UserInfos from './_components/UserInfos'
 
-import { privateFetch } from '@/app/lib/fetch'
-
-export async function fetchDashboardData() {
-  const { CORE_API_URL, API_PREFIX } = process.env
-  const res = await privateFetch(`${CORE_API_URL}/${API_PREFIX}/dashboard`)
-
-  const data = await res.json()
-  return data
-}
-
 export default function Dashboard() {
   return (
     <article className="w-full h-full flex flex-col min-h-0">

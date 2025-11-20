@@ -1,12 +1,11 @@
 import { Suspense } from 'react'
 
+import { getLineGraph } from '../../_lib/api'
 import CardSection from '../CardSection'
 import styles from '../dashboard.module.css'
 import ShortcutLink from '../ShortcutLink'
 
 import LineGraph from './LineGraph'
-
-import { privateFetch } from '@/app/lib/fetch'
 
 export default async function RecentGraph({
   className,
@@ -33,11 +32,7 @@ export default async function RecentGraph({
 }
 
 async function GraphArea() {
-  const { CORE_API_URL, API_PREFIX } = process.env
-  const res = await privateFetch(
-    `${CORE_API_URL}/${API_PREFIX}/dashboard/graphs/line`,
-  )
-  const { labels, scores, durations } = await res.json()
+  const { labels, scores, durations } = await getLineGraph()
 
   const graphData = [labels, scores, durations] as [
     string[],

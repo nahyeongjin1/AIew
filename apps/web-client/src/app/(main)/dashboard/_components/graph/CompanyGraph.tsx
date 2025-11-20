@@ -1,11 +1,10 @@
 import { Suspense } from 'react'
 
+import { getCompanyGraph } from '../../_lib/api'
 import CardSection from '../CardSection'
 import styles from '../dashboard.module.css'
 
 import DoughnutGraph from './DoughnutGraph'
-
-import { privateFetch } from '@/app/lib/fetch'
 
 export default async function CompanyGraph({
   className,
@@ -28,12 +27,7 @@ export default async function CompanyGraph({
 }
 
 async function GraphArea() {
-  const { CORE_API_URL, API_PREFIX } = process.env
-  const res = await privateFetch(
-    `${CORE_API_URL}/${API_PREFIX}/dashboard/graphs/company`,
-  )
-
-  const { labels, counts } = await res.json()
+  const { labels, counts } = await getCompanyGraph()
   const companyCount = [labels, counts] as [string[], number[]]
 
   return (

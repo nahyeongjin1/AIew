@@ -6,11 +6,9 @@ import ReportTable from './_components/table/ReportTable'
 import TableBody from './_components/table/ReportTableBody'
 import TableBodySkeleton from './_components/table/ReportTableBodySkeleton'
 import TableHeader from './_components/table/ReportTableHeader'
-
-import { privateFetch } from '@/app/lib/fetch'
+import { getTotalPage, Query } from './_lib/api'
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>
-export type Query = [string, string][]
 
 export default async function ReportsPage({
   searchParams,
@@ -26,14 +24,7 @@ export default async function ReportsPage({
 
   const queryWithoutPage = query.filter(([key]) => key !== 'page')
 
-  const { CORE_API_URL, API_PREFIX } = process.env
-
-  const response = await privateFetch(
-    `${CORE_API_URL}/${API_PREFIX}/reports/pages/count?${new URLSearchParams(query)}`,
-    { cache: 'no-store' },
-  )
-
-  const totalPages = await response.json()
+  const totalPages = await getTotalPage(query)
 
   return (
     <article className="w-full h-full flex flex-col items-center gap-24">
