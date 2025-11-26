@@ -479,6 +479,30 @@ export class InterviewService {
       await prisma.interviewStep.deleteMany({
         where: { interviewSessionId: sessionId },
       })
+      // 새 파일이 제공된 경우에만 기존 R2 파일 삭제 (고아 파일 방지)
+      const { fileService } = this.fastify
+      const deletePromises: Promise<void>[] = []
+      if (files?.coverLetter) {
+        deletePromises.push(
+          fileService.deleteByPrefix(`coverLetter/${sessionId}/`),
+        )
+      }
+      if (files?.portfolio) {
+        deletePromises.push(
+          fileService.deleteByPrefix(`portfolio/${sessionId}/`),
+        )
+      }
+      if (deletePromises.length > 0) {
+        try {
+          await Promise.all(deletePromises)
+          log.info(`[${sessionId}] Old R2 files deleted for updated files.`)
+        } catch (error) {
+          log.error(
+            { error },
+            `[${sessionId}] Failed to delete old R2 files, proceeding with upload`,
+          )
+        }
+      }
 
       // 백그라운드 재처리 시작
       const fullInterviewData = {
@@ -544,6 +568,21 @@ export class InterviewService {
       log.error(
         { error },
         `[${sessionId}] Failed to reset AI memory before deletion, but proceeding with DB deletion`,
+      )
+    }
+
+    // R2에서 관련 파일들 삭제
+    const { fileService } = this.fastify
+    try {
+      await Promise.all([
+        fileService.deleteByPrefix(`coverLetter/${sessionId}/`),
+        fileService.deleteByPrefix(`portfolio/${sessionId}/`),
+      ])
+      log.info(`[${sessionId}] R2 files deleted successfully.`)
+    } catch (error) {
+      log.error(
+        { error },
+        `[${sessionId}] Failed to delete R2 files, but proceeding with DB deletion`,
       )
     }
 
@@ -1007,6 +1046,12 @@ export default fp(
   },
   {
     name: 'interviewService',
-    dependencies: ['aiClientService', 'prisma', 'r2', 'ttsService'],
+    dependencies: [
+      'aiClientService',
+      'fileService',
+      'prisma',
+      'r2',
+      'ttsService',
+    ],
   },
 )

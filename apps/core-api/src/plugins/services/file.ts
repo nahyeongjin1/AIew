@@ -1,4 +1,8 @@
-import { PutObjectCommand } from '@aws-sdk/client-s3'
+import {
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3'
 import axios from 'axios'
 import { FastifyInstance } from 'fastify'
 import fp from 'fastify-plugin'
@@ -62,6 +66,16 @@ export class FileService {
 
       const ext = this.getExtensionFromContentType(contentType)
       const fileKey = `profilePictures/${userId}/avatar.${ext}`
+
+      // 기존 프로필 사진 삭제 (확장자가 바뀌면 고아 파일이 되므로)
+      try {
+        await this.deleteByPrefix(`profilePictures/${userId}/`)
+      } catch {
+        // 삭제 실패해도 업로드는 진행
+        this.fastify.log.warn(
+          `Failed to delete old profile pictures for user ${userId}, proceeding with upload`,
+        )
+      }
 
       const publicUrl = await this.uploadToR2(fileKey, buffer, contentType)
 
@@ -148,6 +162,62 @@ export class FileService {
       }
 
       return null
+    }
+  }
+
+  /**
+   * R2에서 단일 파일 삭제
+   * @param key - 삭제할 파일 키 (예: 'profilePictures/userId/avatar.jpg')
+   */
+  public async deleteFromR2(key: string): Promise<void> {
+    try {
+      await this.fastify.r2.send(
+        new DeleteObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Key: key,
+        }),
+      )
+      this.fastify.log.info(`File deleted from R2: ${key}`)
+    } catch (error) {
+      this.fastify.log.error(error, `Failed to delete file from R2: ${key}`)
+      throw error
+    }
+  }
+
+  /**
+   * R2에서 특정 prefix로 시작하는 모든 파일 삭제
+   * @param prefix - 삭제할 파일들의 prefix (예: 'coverLetter/sessionId/')
+   */
+  public async deleteByPrefix(prefix: string): Promise<void> {
+    try {
+      const listResponse = await this.fastify.r2.send(
+        new ListObjectsV2Command({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Prefix: prefix,
+        }),
+      )
+
+      const objects = listResponse.Contents ?? []
+      if (objects.length === 0) {
+        this.fastify.log.info(`No files found with prefix: ${prefix}`)
+        return
+      }
+
+      await Promise.all(
+        objects
+          .filter((obj) => obj.Key)
+          .map((obj) => this.deleteFromR2(obj.Key!)),
+      )
+
+      this.fastify.log.info(
+        `Deleted ${objects.length} files with prefix: ${prefix}`,
+      )
+    } catch (error) {
+      this.fastify.log.error(
+        error,
+        `Failed to delete files with prefix: ${prefix}`,
+      )
+      throw error
     }
   }
 
