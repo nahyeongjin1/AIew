@@ -9,6 +9,7 @@ import {
   S_ReportsSummaryResponse,
   S_ReportDetailResponse,
   S_ReportQuestionsResponse,
+  S_ReportsGraphResponse,
 } from '@/schemas/rest'
 
 // TypeBox 스키마에서 타입 추출
@@ -17,6 +18,7 @@ type ReportItem = Static<typeof S_ReportItem>
 type ReportsSummary = Static<typeof S_ReportsSummaryResponse>
 type ReportDetailResponse = Static<typeof S_ReportDetailResponse>
 type ReportQuestionsResponse = Static<typeof S_ReportQuestionsResponse>
+type ReportsGraphResponse = Static<typeof S_ReportsGraphResponse>
 
 export class ReportService {
   private fastify: FastifyInstance
@@ -234,6 +236,25 @@ export class ReportService {
       mainQuestions.length +
       mainQuestions.reduce((sum, q) => sum + q.tailSteps.length, 0)
 
+    // 그래프 데이터용 쿼리 (모든 질문을 flat하게 조회, DB에서 정렬)
+    const allSteps = await prisma.interviewStep.findMany({
+      where: { interviewSessionId: sessionId },
+      orderBy: { aiQuestionId: 'asc' },
+      select: {
+        aiQuestionId: true,
+        score: true,
+        answerDurationSec: true,
+      },
+    })
+
+    const graphData = {
+      labels: allSteps.map((step) => step.aiQuestionId),
+      scores: allSteps.map((step) => step.score ?? 0),
+      durations: allSteps.map(
+        (step) => Math.round(((step.answerDurationSec ?? 0) / 60) * 10) / 10,
+      ),
+    }
+
     return {
       overviewInfo: {
         interviewInfo: {
@@ -262,6 +283,7 @@ export class ReportService {
         },
       },
       feedback: session.finalFeedback ?? '',
+      graphData,
     }
   }
 
@@ -305,7 +327,7 @@ export class ReportService {
 
     const { title } = session
 
-    // 메인 질문들 조회 (tailSteps 포함)
+    // 메인 질문들 조회 (tailSteps, emotionAnalysis 포함)
     const mainQuestions = await prisma.interviewStep.findMany({
       where: {
         interviewSessionId: sessionId,
@@ -313,8 +335,24 @@ export class ReportService {
       },
       orderBy: { aiQuestionId: 'asc' },
       include: {
+        emotionAnalysis: {
+          include: {
+            frames: {
+              orderBy: { time: 'asc' },
+            },
+          },
+        },
         tailSteps: {
           orderBy: { aiQuestionId: 'asc' },
+          include: {
+            emotionAnalysis: {
+              include: {
+                frames: {
+                  orderBy: { time: 'asc' },
+                },
+              },
+            },
+          },
         },
       },
     })
@@ -342,6 +380,7 @@ export class ReportService {
       feedback: mainQ.feedback,
       interviewSessionId: mainQ.interviewSessionId,
       parentStepId: mainQ.parentStepId,
+      emotionGraphData: this.transformEmotionFrames(mainQ.emotionAnalysis),
       tailSteps: mainQ.tailSteps.map((tailQ) => ({
         id: tailQ.id,
         aiQuestionId: tailQ.aiQuestionId,
@@ -364,6 +403,7 @@ export class ReportService {
         feedback: tailQ.feedback,
         interviewSessionId: tailQ.interviewSessionId,
         parentStepId: tailQ.parentStepId,
+        emotionGraphData: this.transformEmotionFrames(tailQ.emotionAnalysis),
         tailSteps: [], // 꼬리질문의 꼬리질문은 없음
       })),
     }))
@@ -371,6 +411,38 @@ export class ReportService {
     return {
       title,
       questions,
+    }
+  }
+
+  /**
+   * 필터 조건에 맞는 리포트들의 그래프 데이터를 반환합니다
+   * 페이지네이션 없이 모든 매칭 데이터 반환 (updatedAt 오름차순 정렬)
+   */
+  public async getReportsGraph(
+    userId: string,
+    params: ReportQueryParams,
+  ): Promise<ReportsGraphResponse> {
+    const { prisma } = this.fastify
+
+    const where = this.buildWhereClause(userId, params)
+
+    // 완료된 면접 세션 조회 (updatedAt 오름차순 정렬 - 시간순 그래프용)
+    const sessions = await prisma.interviewSession.findMany({
+      where,
+      orderBy: { updatedAt: 'asc' },
+      select: {
+        title: true,
+        averageScore: true,
+        totalTimeSec: true,
+      },
+    })
+
+    return {
+      labels: sessions.map((s) => s.title),
+      scores: sessions.map((s) => s.averageScore ?? 0),
+      durations: sessions.map((s) =>
+        s.totalTimeSec ? Math.round(s.totalTimeSec / 60) : 0,
+      ),
     }
   }
 
@@ -479,8 +551,8 @@ export class ReportService {
     | Prisma.InterviewSessionOrderByWithRelationInput
     | Prisma.InterviewSessionOrderByWithRelationInput[] {
     if (!sort) {
-      // 기본: 최신순
-      return { createdAt: 'desc' }
+      // 기본: 완료된 순서
+      return { updatedAt: 'desc' }
     }
 
     const [field, order] = sort.split('-')
@@ -516,6 +588,46 @@ export class ReportService {
 
     // 유효하지 않은 필드는 기본 정렬
     return { createdAt: 'desc' }
+  }
+
+  /**
+   * EmotionAnalysis를 그래프 데이터 형식으로 변환합니다
+   */
+  private transformEmotionFrames(
+    emotionAnalysis: {
+      frames: {
+        time: number
+        happy: number
+        sad: number
+        neutral: number
+        angry: number
+        fear: number
+        surprise: number
+      }[]
+    } | null,
+  ): {
+    times: number[]
+    happy: number[]
+    sad: number[]
+    neutral: number[]
+    angry: number[]
+    fear: number[]
+    surprise: number[]
+  } | null {
+    if (!emotionAnalysis || emotionAnalysis.frames.length === 0) {
+      return null
+    }
+
+    const { frames } = emotionAnalysis
+    return {
+      times: frames.map((f) => f.time),
+      happy: frames.map((f) => f.happy),
+      sad: frames.map((f) => f.sad),
+      neutral: frames.map((f) => f.neutral),
+      angry: frames.map((f) => f.angry),
+      fear: frames.map((f) => f.fear),
+      surprise: frames.map((f) => f.surprise),
+    }
   }
 }
 
