@@ -1,15 +1,8 @@
 import LineGraph from '../../_components/graph/LineGraph'
 import EmptyMessage from '../../dashboard/_components/EmptyMessage'
+import { GraphData } from '../_types'
 
-export default function ReportsGraph({
-  data,
-}: {
-  data: {
-    labels: string[]
-    scores: number[]
-    durations: number[]
-  }
-}) {
+export default function ReportsGraph({ data }: { data: GraphData }) {
   const { labels, scores, durations } = data
   const graphData = [labels, scores, durations] as [
     string[],

@@ -30,9 +30,31 @@ export type OverviewInfo = {
   metricsInfo: MetricsInfo
 }
 
+export type GraphData = {
+  labels: string[]
+  scores: number[]
+  durations: number[]
+}
+
 export type ReportResponse = {
   overviewInfo: OverviewInfo
   feedback: string
+  graphData: GraphData
+}
+
+export type EmotionGraphData = {
+  times: (string | number)[]
+  angry: number[]
+  fear: number[]
+  happy: number[]
+  neutral: number[]
+  sad: number[]
+  surprise: number[]
+}
+
+export type EmotionGraphDataWithId = {
+  id: string
+  graphData: EmotionGraphData
 }
 
 export type ReportQuestionsResponse = {
@@ -63,4 +85,5 @@ export type ReportQuestionStep = {
   interviewSessionId: string
   parentStepId: string | null
   tailSteps: ReportQuestionStep[]
+  emotionGraphData: EmotionGraphData
 }
