@@ -4,6 +4,7 @@ on:
   release:
     types: [published]
   workflow_dispatch: # 수동 실행 가능
+  workflow_call: # release-please에서 호출
 
 concurrency:
   group: deploy-production
